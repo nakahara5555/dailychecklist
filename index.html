@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>日常チェックリスト</title>
+  <style>
+    :root { font-family: system-ui,-apple-system,"Segoe UI",sans-serif; color:#202b35; background:#f5f6f7; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:56px 16px; }
+    main { max-width:620px; margin:auto; padding:32px; background:#fff; border:1px solid #e5e8eb; border-radius:18px; box-shadow:0 12px 36px #182b3808; }
+    h1 { margin:0 0 8px; font-size:1.55rem; letter-spacing:-.035em; }
+    .description { margin:0 0 24px; color:#707b85; font-size:.9rem; line-height:1.6; }
+    .summary { display:flex; justify-content:space-between; align-items:center; padding:0 2px 12px; font-size:.86rem; color:#66717b; }
+    .summary strong { color:#273842; font-variant-numeric:tabular-nums; }
+    ul { list-style:none; padding:0; margin:0 0 26px; display:grid; gap:10px; }
+    li { padding:16px; border:1px solid #e4e8eb; border-radius:12px; background:#fff; transition:background .18s,border-color .18s; }
+    li.done { background:#e9f5ee; border-color:#a9d8bc; }
+    .item-row { display:flex; align-items:center; gap:12px; }
+    .item-content { flex:1; min-width:0; }
+    label { display:flex; flex:1; align-items:center; gap:12px; min-width:0; font-weight:600; cursor:pointer; overflow-wrap:anywhere; }
+    input[type=checkbox] { width:21px; height:21px; flex-shrink:0; accent-color:#278353; cursor:pointer; }
+    .done label { color:#206943; }
+    .timestamp { display:block; margin:6px 0 0 33px; min-height:1.2em; color:#427b59; font-size:.78rem; font-variant-numeric:tabular-nums; }
+    button { font:inherit; font-size:.88rem; font-weight:600; border-radius:9px; padding:11px 16px; border:1px solid transparent; cursor:pointer; transition:background .15s; }
+    button:focus-visible,input:focus-visible { outline:3px solid #a6c6b7; outline-offset:2px; }
+    .delete-button { flex-shrink:0; padding:7px 11px; color:#66717b; background:transparent; border-color:#dce1e5; }
+    .delete-button:hover { background:#f0f2f3; }
+    .section-title { font-size:.9rem; font-weight:700; margin:0 0 12px; }
+    form { display:flex; gap:9px; }
+    input[type=text] { min-width:0; flex:1; padding:12px 13px; border:1px solid #d6dde2; border-radius:9px; font:inherit; font-size:.9rem; }
+    form button { background:#273a46; color:#fff; min-width:72px; }
+    form button:hover { background:#405764; }
+    .actions { display:flex; justify-content:flex-end; border-top:1px solid #edf0f1; padding-top:18px; margin-top:22px; }
+    .reset-button { background:#f0f2f3; color:#41515c; border-color:#e1e6e8; }
+    .reset-button:hover { background:#e5e9eb; }
+    .reset-button:disabled { opacity:.45; cursor:not-allowed; }
+    .empty { text-align:center; color:#7a858d; padding:24px; }
+    @media(max-width:440px) { body { padding:18px 12px; } main { padding:24px 17px; } .timestamp { font-size:.74rem; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>日常チェックリスト</h1>
+    <p class="description">完了した項目にチェックを入れると、日時が記録されます。</p>
+    <div class="summary"><span>チェック状況</span><strong id="progress">0 / 3 完了</strong></div>
+    <ul id="checklist"></ul>
+    <p class="section-title">項目を追加</p>
+    <form id="add-form">
+      <input id="new-item" type="text" maxlength="100" placeholder="新しい項目を入力" aria-label="新しい項目" required>
+      <button type="submit">追加</button>
+    </form>
+    <div class="actions"><button id="reset-checks" type="button" class="reset-button">全てのチェックをオフ</button></div>
+  </main>
+  <script>
+    const STORAGE_KEY = 'daily-checklist-v1';
+    const defaults = ['鍵の施錠', '窓の施錠', '部屋の消灯'];
+    function loadItems() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved !== null) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (error) { console.warn('保存データを読み込めませんでした。', error); }
+      return defaults.map(name => ({ id: crypto.randomUUID(), name, checkedAt: null }));
+    }
+    let items = loadItems();
+    const list = document.getElementById('checklist');
+    const form = document.getElementById('add-form');
+    const input = document.getElementById('new-item');
+    function save() {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); }
+      catch (error) { console.warn('保存に失敗しました。', error); alert('データを保存できませんでした。ブラウザの設定をご確認ください。'); }
+    }
+    function render() {
+      list.replaceChildren();
+      document.getElementById('progress').textContent = `${items.filter(item => item.checkedAt).length} / ${items.length} 完了`;
+      document.getElementById('reset-checks').disabled = !items.some(item => item.checkedAt);
+      for (const item of items) {
+        const li = document.createElement('li');
+        if (item.checkedAt) li.classList.add('done');
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = Boolean(item.checkedAt);
+        checkbox.addEventListener('change', () => {
+          item.checkedAt = checkbox.checked ? new Date().toISOString() : null;
+          save();
+          render();
+        });
+        const name = document.createElement('span');
+        name.textContent = item.name;
+        label.append(checkbox, name);
+        const row = document.createElement('div');
+        row.className = 'item-row';
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'delete-button';
+        deleteButton.textContent = '削除';
+        deleteButton.setAttribute('aria-label', item.name + 'を削除');
+        deleteButton.addEventListener('click', () => {
+          items = items.filter(entry => entry.id !== item.id);
+          save();
+          render();
+        });
+        const content = document.createElement('div');
+        content.className = 'item-content';
+        content.append(label);
+        if (item.checkedAt) {
+          const time = document.createElement('time');
+          time.className = 'timestamp';
+          time.dateTime = item.checkedAt;
+          time.textContent = 'チェック日時：' + new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(item.checkedAt));
+          content.append(time);
+        }
+        row.append(content, deleteButton);
+        li.append(row);
+        list.append(li);
+      }
+    }
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const name = input.value.trim();
+      if (!name) return;
+      items.push({ id: crypto.randomUUID(), name, checkedAt: null });
+      save();
+      render();
+      form.reset();
+      input.focus();
+    });
+    document.getElementById('reset-checks').addEventListener('click', () => {
+      items.forEach(item => { item.checkedAt = null; });
+      save();
+      render();
+    });
+    /* 旧リセット処理は reset-checks に統合 */
+    /* document.getElementById('reset-all').addEventListener('click', () => {
+      if (!items.some(item => item.checkedAt)) return;
+      if (!confirm('全てのチェックを外し、チェック日時を削除しますか？\n項目自体は残ります。')) return;
+      items.forEach(item => { item.checkedAt = null; });
+      save();
+      render();
+    }); */
+    render();
+  </script>
+</body>
+</html>
